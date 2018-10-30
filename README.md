@@ -26,10 +26,18 @@
 
 ## NVIDIA GPU Architecture
 
+Pascal GP100
+
 ![Pascal Block](pascal-block-diagram.png)
+
+* 60 SMs (Streaming Multiprocessors)
+* 30 TPCs
+* มี Memmory แยกจาก Main Memory ของ CPU
 
 ![Pascal SM](pascal-sm.png)
 
+* 64 CUDA Cores
+* 64KB On-chip Shared Memory (High Bandwidth)
 
 ภาพจาก [PCWord](https://www.pcworld.com/article/3052222/components-graphics/nvidias-pascal-gpu-tech-specs-revealed-full-cuda-count-clock-speeds-and-more.html)
 
@@ -40,6 +48,54 @@
 * Kernel
 * Grid
 * Thread Block
+
+## deviceQuery
+
+```
+./deviceQuery Starting...
+
+ CUDA Device Query (Runtime API) version (CUDART static linking)
+
+Detected 2 CUDA Capable device(s)
+
+Device 0: "Tesla K40c"
+  CUDA Driver Version / Runtime Version          10.0 / 9.0
+  CUDA Capability Major/Minor version number:    3.5
+  Total amount of global memory:                 12207 MBytes (12799574016 bytes)
+  (15) Multiprocessors, (192) CUDA Cores/MP:     2880 CUDA Cores
+  GPU Max Clock rate:                            745 MHz (0.75 GHz)
+  Memory Clock rate:                             3004 Mhz
+  Memory Bus Width:                              384-bit
+  L2 Cache Size:                                 1572864 bytes
+  Maximum Texture Dimension Size (x,y,z)         1D=(65536), 2D=(65536, 65536), 3D=(4096, 4096, 4096)
+  Maximum Layered 1D Texture Size, (num) layers  1D=(16384), 2048 layers
+  Maximum Layered 2D Texture Size, (num) layers  2D=(16384, 16384), 2048 layers
+  Total amount of constant memory:               65536 bytes
+  Total amount of shared memory per block:       49152 bytes
+  Total number of registers available per block: 65536
+  Warp size:                                     32
+  Maximum number of threads per multiprocessor:  2048
+  Maximum number of threads per block:           1024
+  Max dimension size of a thread block (x,y,z): (1024, 1024, 64)
+  Max dimension size of a grid size    (x,y,z): (2147483647, 65535, 65535)
+  Maximum memory pitch:                          2147483647 bytes
+  Texture alignment:                             512 bytes
+  Concurrent copy and kernel execution:          Yes with 2 copy engine(s)
+  Run time limit on kernels:                     No
+  Integrated GPU sharing Host Memory:            No
+  Support host page-locked memory mapping:       Yes
+  Alignment requirement for Surfaces:            Yes
+  Device has ECC support:                        Disabled
+  Device supports Unified Addressing (UVA):      Yes
+  Supports Cooperative Kernel Launch:            No
+  Supports MultiDevice Co-op Kernel Launch:      No
+  Device PCI Domain ID / Bus ID / location ID:   0 / 3 / 0
+  Compute Mode:
+     < Default (multiple host threads can use ::cudaSetDevice() with device simultaneously) >
+
+...
+```
+
 
 ## Application ที่เหมาะสม
 
@@ -89,6 +145,8 @@ __global__ void vecadd(float *a, float *b, float *c, int N) {
 }
 ```
 
+Thread Per Grid และ Thread Per Block สามารถกำหนดได้หลายมิติ
+
 ## Function modifiers
 
 * `__host__` เรียกได้จาก Host และรันบน Host
@@ -108,6 +166,26 @@ __global__ void vecadd(float *a, float *b, float *c, int N) {
 
 ## CUDA Parallel Reduction
 
+```C
+__global__ void reduce(int *data, int *sum) {
+  extern __shread__ int sdata[];
+
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int tid = threadIdx.x;
+
+  sdata[tid] = data[i];
+  __syncthreads(); // synchronize all threads in block
+
+  for (int k = 1; k < blockDim.x; k *= 2) {
+    if (tid % (2*k) == 0) 
+      sdata[tid] = sdata[tid + k];
+    __syncthreads();
+  }
+
+  if (tid == 0)
+    sum[blockIdx.x] = sdata[0];
+}
+```
 
 
 ## Compute Capability
