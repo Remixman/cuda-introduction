@@ -96,6 +96,16 @@ __global__ void vecadd(float *a, float *b, float *c, int N) {
 * `__device__` เรียกได้จาก Device และรันบน Device
 
 
+## Memory Hierarchy
+
+* Global Memory
+* Local Memory
+* Shared Memory
+* Constant Memory
+* Texture and Surface Memory
+
+![Memory Hierarchy](memory-hierarchy.png)
+
 ## CUDA Parallel Reduction
 
 
@@ -103,6 +113,13 @@ __global__ void vecadd(float *a, float *b, float *c, int N) {
 ## Compute Capability
 
 https://en.wikipedia.org/wiki/CUDA (Version features and specifications)
+
+## Multiple GPUs Management
+
+* `cudaGetDeviceCount(int *count)`
+* `cudaSetDevice(int device)`
+* `cudaGetDevice(int device)`
+* `cudaGetDeviceProperties(cudaDeviceProp *prop, int device)`
 
 ## ทางเลือกอื่นสำหรับ GPU Programming
 
