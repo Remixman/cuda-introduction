@@ -28,13 +28,13 @@
 
 Pascal GP100
 
-![Pascal Block](pascal-block-diagram.png)
+![Pascal Block](images/pascal-block-diagram.png)
 
 * 60 SMs (Streaming Multiprocessors)
 * 30 TPCs
 * มี Memmory แยกจาก Main Memory ของ CPU
 
-![Pascal SM](pascal-sm.png)
+![Pascal SM](images/pascal-sm.png)
 
 * 64 CUDA Cores
 * 64KB On-chip Shared Memory (High Bandwidth)
@@ -45,11 +45,17 @@ Pascal GP100
 
 * Host - CPU และ Main Memory ของเครื่องที่ใช้รัน
 * Device - GPU และ Memory ของ GPU
-* Kernel
-* Grid
-* Thread Block
+* Kernel - ฟังก์ชันที่ทำงานบน Device โดยเรียกใช้งานจาก Host
+* Streaming Multiprocessors (SM) - กลุ่มของ Processor ที่ประมวลผลคำสั่งเดียวกัน หรือ SIMT (Single Instruction Multiple Threads)
+* Thread Block - กลุ่มของ Threads ที่รันอยู่บน SM เดียวกัน
+* Grid - กลุ่มของ Thread Block
+* Warp - กลุ่มของ Thread ที่ประมวลผลพร้อมกัน บน Hardware เป็นหน่วยย่อยที่สุดของการ Schedule ใน NVIDIA GPU
+
+![Grid](images/grid.png)
 
 ## deviceQuery
+
+ใน CUDA Toolkit จะมีโปรแกรมตัวอย่างเริ่มต้นมากมายที่สามารถดูเพื่อทำความเข้าใจ CUDA ได้ โปรแกรมตัวหนึ่งมีชื่อว่า deviceQuery ที่แสดงข้อมูลต่าง ๆ ของ GPU ของเราออกมาได้ ซึ่งจะอยู่ที่ `$CUDA_TOOLKIT_PATH/NVIDIA_CUDA-x.x_Samples/1_Utilities/deviceQuery`
 
 ```
 ./deviceQuery Starting...
@@ -224,7 +230,7 @@ __global__ void moving_average(float *in, float *out) {
 * Constant Memory
 * Texture and Surface Memory
 
-![Memory Hierarchy](memory-hierarchy.png)
+![Memory Hierarchy](images/memory-hierarchy.png)
 
 ## CUDA Parallel Reduction
 
