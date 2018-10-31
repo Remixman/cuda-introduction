@@ -177,7 +177,7 @@ void moving_average(float *in, float *out, int N) {
 CUDA Kernel
 
 ```C
-__global__ void moving_average(float *in, float *out, int N) {
+__global__ void moving_average(float *in, float *out) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= 1 && i < N-1) {
     out[i] = (in[i-1] + in[i] + in[i+1]) / 3.0;
@@ -192,15 +192,16 @@ nvprof ./ma
 ```
 
 ```C
-__global__ void moving_average(float *in, float *out, int N) {
+__global__ void moving_average(float *in, float *out) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   int tid = threadIdx.x;
-  __shread__ float temp[BLOCK_SIZE + 2];
+  __shared__ float temp[BLOCK_SIZE + 2];
   
   if (i < N) {
     temp[tid+1] = in[i];
-    if (threadIdx.x == 0) {
-      
+    if (threadIdx.x == 0 && i > 0) {
+      temp[0] = in[i-1];
+      temp[blockDim.x] = 0;
     }
   }
   
