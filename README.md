@@ -43,8 +43,8 @@ Pascal GP100
 
 ## Terminology
 
-* Host
-* Device
+* Host - CPU และ Main Memory ของเครื่องที่ใช้รัน
+* Device - GPU และ Memory ของ GPU
 * Kernel
 * Grid
 * Thread Block
@@ -114,26 +114,35 @@ Device 0: "Tesla K40c"
 ```C
 float *a, *b, *c;
 float *d_a, *d_b, *d_c;
+int vecSize = N * sizeof(float);
+
+a = (float*)malloc(vecSize);
+b = (float*)malloc(vecSize);
+c = (float*)malloc(vecSize);
 
 // Allocate device memory for vector a, b and c
-cudaMalloc((void**)&d_a, N * sizeof(float));
-cudaMalloc((void**)&d_b, N * sizeof(float));
-cudaMalloc((void**)&d_c, N * sizeof(float));
+cudaMalloc((void**)&d_a, vecSize);
+cudaMalloc((void**)&d_b, vecSize);
+cudaMalloc((void**)&d_c, vecSize);
 
 // Transfer data from host to device
-cudaMemcpy(d_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
-cudaMemcpy(d_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+cudaMemcpy(d_a, a, vecSize, cudaMemcpyHostToDevice);
+cudaMemcpy(d_b, b, vecSize, cudaMemcpyHostToDevice);
 
 // Call kernel
-vecadd<<<>>>(d_a, d_b, d_c, N);
+int threadsPerBlock = 256;
+int numBlocks = ceil(N * 1.0 / threadsPerBlock);
+vecadd<<<numBlocks, threadsPerBlock>>>(d_a, d_b, d_c, N);
 
 // Transfer data from device to host
-cudaMemcpy(c, d_c, N * sizeof(float), cudaMemcpyDeviceToHost);
+cudaMemcpy(c, d_c, vecSize, cudaMemcpyDeviceToHost);
 
 // Deallocate device memory
 cudaFree(d_a);
 cudaFree(d_b);
 cudaFree(d_c);
+
+free(a); free(b); free(c);
 ```
 
 Kernel
@@ -152,6 +161,58 @@ Thread Per Grid และ Thread Per Block สามารถกำหนดไ�
 * `__host__` เรียกได้จาก Host และรันบน Host
 * `__global__` เรียกได้จาก Host และรันบน Device
 * `__device__` เรียกได้จาก Device และรันบน Device
+
+## Moving Average (Low-pass filter)
+
+Sequential Code
+
+```C
+void moving_average(float *in, float *out, int N) {
+  for (int i = 1; i < N-1; i++) {
+    out[i] = (in[i-1] + in[i] + in[i+1]) / 3.0;
+  }
+}
+```
+
+CUDA Kernel
+
+```C
+__global__ void moving_average(float *in, float *out, int N) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= 1 && i < N-1) {
+    out[i] = (in[i-1] + in[i] + in[i+1]) / 3.0;
+  }
+}
+```
+
+ในแต่ละ Thread มีการ Access Global Memory 3 ครั้ง
+
+```
+nvprof ./ma
+```
+
+```C
+__global__ void moving_average(float *in, float *out, int N) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int tid = threadIdx.x;
+  __shread__ float temp[BLOCK_SIZE + 2];
+  
+  if (i < N) {
+    temp[tid+1] = in[i];
+    if (threadIdx.x == 0) {
+      
+    }
+  }
+  
+  __syncthreads();
+  
+  if (i >= 1 && i < N-1) {
+    out[i] = (temp[tid-1] + temp[tid] + temp[i+1]) / 3.0;
+  }
+}
+```
+
+
 
 
 ## Memory Hierarchy
@@ -187,10 +248,10 @@ __global__ void reduce(int *data, int *sum) {
 }
 ```
 
+## Debuging CUDA
 
-## Compute Capability
-
-https://en.wikipedia.org/wiki/CUDA (Version features and specifications)
+* `cudaError_t cudaGetLastError(void)`
+* `char *cudaGetErrorString(cudaError_t)`
 
 ## Multiple GPUs Management
 
@@ -206,3 +267,8 @@ https://en.wikipedia.org/wiki/CUDA (Version features and specifications)
 * OpenMP
 * NVIDIA Thrust
 * Microsoft C++ AMP
+
+## References
+
+* https://docs.nvidia.com/cuda/cuda-c-programming-guide/
+* https://en.wikipedia.org/wiki/CUDA (Version features and specifications)
