@@ -39,7 +39,10 @@ Pascal GP100
 * 64 CUDA Cores
 * 64KB On-chip Shared Memory (High Bandwidth)
 
-ภาพจาก [PCWord](https://www.pcworld.com/article/3052222/components-graphics/nvidias-pascal-gpu-tech-specs-revealed-full-cuda-count-clock-speeds-and-more.html)
+GPU จึงเหมาะกับ
+
+* โปรแกรมแบบ Data Parallelism
+* งานที่ต้องการ Throughput สูง
 
 ## Terminology
 
@@ -102,12 +105,11 @@ Device 0: "Tesla K40c"
 ...
 ```
 
+## Execution Flow
 
-## Application ที่เหมาะสม
+การเขียนโปรแกรมเพื่อทำงานบน GPU จะมีขั้นตอนที่ซับซ้อนเพื่อขึ้นจากการที่ Memory ของ GPU แยกจาก Main Memory จึงจะต้องทำการ Allocate พื้นที่ก่อนใช้งาน และ Transfer ข้อมูลไปกลับระหว่าง Host และ Device
 
-* High Throughput, Low Latency
-
-## รูปแบบการประมวลผล
+ขั้นตอนโดยทั่วไปจะเป็น
 
 1. Allocate Memory บน Device
 2. Transfer ข้อมูลจาก Host ไปยัง Device
@@ -116,6 +118,8 @@ Device 0: "Tesla K40c"
 5. Deallocate Memory บน Device
 
 ## CUDA Vector Addition
+
+ตัวอย่างโปรแกรมบวก Vector a และ b เข้าด้วยกัน โดยใช้ CUDA
 
 ```C
 float *a, *b, *c;
@@ -168,90 +172,64 @@ Thread Per Grid และ Thread Per Block สามารถกำหนดไ�
 * `__global__` เรียกได้จาก Host และรันบน Device
 * `__device__` เรียกได้จาก Device และรันบน Device
 
+## Memory Hierarchy
+
+* Global Memory - มองเห็นได้จากทั้ง Host และ Device ใช้สำหรับส่งข้อมูลไปกลับระหว่าง Host และ Device ทุก Thread สามารถมองเห็นได้ทั้งหมด
+* Local Memory - มองเห็นได้เฉพาะใน Thread เท่านั้น
+* Shared Memory - มองเห็นได้จากใน Thread Block เดียวกัน มีความเร็วสูงกว่า Global Memory
+* Register - มองเห็นได้เฉพาะใน Thread เท่านั้น มีความเร็วสูง แต่มีขนาดจำกัด
+* Constant Memory - แก้ไขไม่ได้ใน Kernel (อ่านได้อย่างเดียว) คุณสมบัติเหมือน Global Memory แต่มี Cached
+
+![Memory Hierarchy](images/memory-hierarchy.png)
+
 ## Moving Average (Low-pass filter)
+
+|  in  |  0  |  1  |  2  |  3  |  4  |  5  |  6  |  7  | ... | N-1 |  N  |
+|------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| out  |  -  |  0  |  1  |  2  |  3  |  4  |  5  | ... | N-3 | N-2 |  -  |
 
 Sequential Code
 
 ```C
 void moving_average(float *in, float *out, int N) {
   for (int i = 1; i < N-1; i++) {
-    out[i] = (in[i-1] + in[i] + in[i+1]) / 3.0;
+    out[i] = (in[i] + in[i+1] + in[i+2]) / 3.0;
   }
 }
 ```
 
-CUDA Kernel
+CUDA Kernel (ในแต่ละ Thread มีการ Access Global Memory 3 ครั้ง)
 
 ```C
 __global__ void moving_average(float *in, float *out) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= 1 && i < N-1) {
-    out[i] = (in[i-1] + in[i] + in[i+1]) / 3.0;
+  if (i < N-2) {
+    out[i] = (in[i] + in[i+1] + in[i+2]) / 3.0;
   }
 }
 ```
 
-ในแต่ละ Thread มีการ Access Global Memory 3 ครั้ง
-
-```
-nvprof ./ma
-```
+Optimized Version
 
 ```C
 __global__ void moving_average(float *in, float *out) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   int tid = threadIdx.x;
-  __shared__ float temp[BLOCK_SIZE + 2];
+  __shared__ float temp[BLOCKSIZE + 2];
   
-  if (i < N) {
-    temp[tid+1] = in[i];
-    if (threadIdx.x == 0 && i > 0) {
-      temp[0] = in[i-1];
-      temp[blockDim.x] = 0;
+  if (i < N-2) {
+    temp[tid+2] = in[i];
+    if (threadIdx.x == 0) {
+      temp[0] = in[i-2];
+      temp[1] = in[i-1];
     }
   }
   
   __syncthreads();
   
-  if (i >= 1 && i < N-1) {
-    out[i] = (temp[tid-1] + temp[tid] + temp[i+1]) / 3.0;
+  if (i < N-2) {
+    out[i] = (temp[tid] + temp[tid+1] + temp[tid+2]) / 3.0;
   }
-}
-```
-
-
-
-
-## Memory Hierarchy
-
-* Global Memory
-* Local Memory
-* Shared Memory
-* Constant Memory
-* Texture and Surface Memory
-
-![Memory Hierarchy](images/memory-hierarchy.png)
-
-## CUDA Parallel Reduction
-
-```C
-__global__ void reduce(int *data, int *sum) {
-  extern __shread__ int sdata[];
-
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  int tid = threadIdx.x;
-
-  sdata[tid] = data[i];
-  __syncthreads(); // synchronize all threads in block
-
-  for (int k = 1; k < blockDim.x; k *= 2) {
-    if (tid % (2*k) == 0) 
-      sdata[tid] = sdata[tid + k];
-    __syncthreads();
-  }
-
-  if (tid == 0)
-    sum[blockIdx.x] = sdata[0];
 }
 ```
 
@@ -262,20 +240,21 @@ __global__ void reduce(int *data, int *sum) {
 
 ## Multiple GPUs Management
 
-* `cudaGetDeviceCount(int *count)`
-* `cudaSetDevice(int device)`
-* `cudaGetDevice(int device)`
-* `cudaGetDeviceProperties(cudaDeviceProp *prop, int device)`
+* `cudaGetDeviceCount(int *count)` - คืนค่าจำนวน Device ในเครื่อง
+* `cudaSetDevice(int device)` - กำหนด Device ที่จะทำงานด้วย
+* `cudaGetDevice(int *device)` - คืนค่าหมายเลขของ Device ที่เลือกอยู่
+* `cudaGetDeviceProperties(cudaDeviceProp *prop, int device)` - คืนค่าคุณสมบัติของ Device
 
 ## ทางเลือกอื่นสำหรับ GPU Programming
 
-* OpenCL
-* OpenACC
-* OpenMP
-* NVIDIA Thrust
-* Microsoft C++ AMP
+* [OpenCL](https://www.khronos.org/opencl/)
+* [OpenACC](https://www.openacc.org/)
+* [OpenMP](https://www.openmp.org/)
+* [NVIDIA Thrust](https://developer.nvidia.com/thrust)
+* [Microsoft C++ AMP](https://msdn.microsoft.com/en-us/library/hh265137.aspx)
 
 ## References
 
 * https://docs.nvidia.com/cuda/cuda-c-programming-guide/
 * https://en.wikipedia.org/wiki/CUDA (Version features and specifications)
+* https://www.pcworld.com/article/3052222/components-graphics/nvidias-pascal-gpu-tech-specs-revealed-full-cuda-count-clock-speeds-and-more.html (รูปภาพ)
