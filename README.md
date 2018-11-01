@@ -143,7 +143,7 @@ cudaMemcpy(d_b, b, vecSize, cudaMemcpyHostToDevice);
 // Call kernel
 int threadsPerBlock = 256;
 int numBlocks = ceil(N * 1.0 / threadsPerBlock);
-vecadd<<<numBlocks, threadsPerBlock>>>(d_a, d_b, d_c, N);
+vecadd<<<numBlocks, threadsPerBlock>>>(d_a, d_b, d_c);
 
 // Transfer data from device to host
 cudaMemcpy(c, d_c, vecSize, cudaMemcpyDeviceToHost);
@@ -159,7 +159,7 @@ free(a); free(b); free(c);
 Kernel
 
 ```
-__global__ void vecadd(float *a, float *b, float *c, int N) {
+__global__ void vecadd(float *a, float *b, float *c) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i < N) c[i] = a[i] + b[i];
 }
@@ -193,7 +193,7 @@ Sequential Code
 
 ```C
 void moving_average(float *in, float *out, int N) {
-  for (int i = 1; i < N-1; i++) {
+  for (int i = 0; i < N-2; i++) {
     out[i] = (in[i] + in[i+1] + in[i+2]) / 3.0;
   }
 }
