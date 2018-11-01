@@ -43,6 +43,7 @@ GPU จึงเหมาะกับ
 
 * โปรแกรมแบบ Data Parallelism
 * งานที่ต้องการ Throughput สูง
+* เวลาที่ใช้ Compute ควรจะสูงกว่า Transfer มากๆ
 
 ## Terminology
 
@@ -164,7 +165,7 @@ __global__ void vecadd(float *a, float *b, float *c, int N) {
 }
 ```
 
-Thread Per Grid และ Thread Per Block สามารถกำหนดได้หลายมิติ
+Thread Per Grid และ Thread Per Block สามารถกำหนดได้หลายมิติ (สูงสุดคือ 3)
 
 ## Function modifiers
 
